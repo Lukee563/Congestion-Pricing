@@ -34,6 +34,6 @@ The dataset is derived from the **City of New York’s Motor Vehicle Collisions-
 
 ## Authors
 * **Luke Catalano** - *M.S. Quantitative Economics & Finance, UC Santa Cruz*
-* **Eleanor Stoever**
+* **Eleanor Stoever** - *B.S. Applied Mathematics, B.A. Environmental Studies & Economics, UC Santa Cruz*
 
 *Project formatted in LaTeX - November 2025*
