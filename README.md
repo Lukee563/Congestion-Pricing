@@ -1,5 +1,10 @@
 # NYC Congestion Pricing and Its Effects on Motor Vehicle Collisions
+---
+## Authors
+* **Luke Catalano** - *M.S. Quantitative Economics & Finance, UC Santa Cruz*
+* **Eleanor Stoever** - *B.S. Applied Mathematics, B.A. Environmental Studies & Economics, UC Santa Cruz*
 
+---
 ## Overview
 This paper explores the causal effect of New York City’s Lower Manhattan congestion pricing policy on traffic collisions in the district of Manhattan. The study utilizes a **Difference-in-Differences (DiD)** empirical approach to evaluate how the policy, implemented on January 5th, 2025, affected total weekly collision counts.
 
@@ -29,11 +34,5 @@ The dataset is derived from the **City of New York’s Motor Vehicle Collisions-
 * **Period:** January 2023 – March 2025.
 * **Scope:** 115 weeks of data, providing 230 total observations (treatment vs. control pairings).
 * **Variables:** Includes collision coordinates (latitude/longitude), injury/death counts, and contributing factors.
-
----
-
-## Authors
-* **Luke Catalano** - *M.S. Quantitative Economics & Finance, UC Santa Cruz*
-* **Eleanor Stoever** - *B.S. Applied Mathematics, B.A. Environmental Studies & Economics, UC Santa Cruz*
 
 *Project formatted in LaTeX - November 2025*
