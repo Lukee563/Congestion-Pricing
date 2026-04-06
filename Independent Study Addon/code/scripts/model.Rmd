@@ -6,7 +6,6 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
-rm(list=ls())
 library(readr)
 library(dplyr)
 library(tidyr)
@@ -15,6 +14,7 @@ library(grf)
 
 ## Data Importing 
 ```{r}
+setwd("C:/Users/lukec/OneDrive/Desktop/297A Research")
 final_model_data <- read_csv("data/cleaned/model_data_final.csv",
                        show_col_types = FALSE)
 
@@ -36,6 +36,7 @@ X <- model_sample %>%
 
 # Train the Local Linear Causal Forest
 # This fits a local linear regression in each leaf—perfect for the 60th St boundary
+# Training with progress
 cf_final <- causal_forest(X, Y, W, 
                           num.trees = 1000, 
                           clusters = model_sample$hex_id,
@@ -44,9 +45,19 @@ cf_final <- causal_forest(X, Y, W,
 
 # Predict the CATE (The 'Impact' for each row)
 # We use the MEDIAN week_index (the middle of the study) for the spatial map
+
+
+
+# 1. Identify the 'Post-Treatment' weeks only
+post_treatment_weeks <- model_sample$week_index[model_sample$treatment == 1]
+
+# 2. Find the median of JUST those weeks
+target_week <- median(post_treatment_weeks)
+
+# 3. Update X_map with this relevant timestamp
 X_map <- model_sample %>%
   distinct(hex_id, .keep_all = TRUE) %>%
-  mutate(week_index = median(model_sample$week_index)) %>% # Standardize time for the map
+  mutate(week_index = target_week) %>% 
   select(baseline_risk, y_coord, dist_60th, week_index) %>%
   as.matrix()
 
@@ -54,8 +65,7 @@ X_map <- model_sample %>%
 predictions_map <- predict(cf_final, 
                            newdata = X_map,
                            linear.correction.variables = 1:4,
-                           estimate.variance = TRUE)
-
+                           estimate.variance = TRUE) # This shows the IJ variance progress
 
 # Calculate the Average Treatment Effect (ATE)
 average_treatment_effect(cf_final, target.sample = "treated")

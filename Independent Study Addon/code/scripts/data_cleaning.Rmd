@@ -12,7 +12,6 @@ rm(list=ls())
 library(readr)
 library(dplyr)
 library(tidyr)
-library(kableExtra)
 library(nasapower)
 library(tigris)
 library(lubridate)
@@ -21,8 +20,10 @@ library(sf)
 
 ## Data Importing 
 ```{r, warning = FALSE}
+setwd("C:/Users/lukec/OneDrive/Desktop/297A Research")
+
 # Historical Vehicle Collision Reports from NYC since April 6th, 2020.
-MotorCollisions <- read_csv("../../data/raw/MotorCollisions.csv",
+MotorCollisions <- read_csv("data/raw/MotorCollisions.csv",
                             show_col_types = FALSE)
 
 # Date Parameters
@@ -45,8 +46,7 @@ collisions <- MotorCollisions %>%
   mutate(date = mdy(`CRASH DATE`)) %>% 
   filter(!is.na(LATITUDE), 
          !is.na(LONGITUDE), 
-         date >= as.Date("2022-01-01"),
-         date <= as.Date("2025-03-22")) %>%
+         date >= as.Date("2022-01-01")) %>%
   st_as_sf(coords = c("LONGITUDE", "LATITUDE"), crs = 4326) %>%
   st_transform(2263) %>%
   st_filter(nyc_boundary)
@@ -108,6 +108,8 @@ final_model_data <- final_model_data %>%
 final_model_data <- final_model_data %>%
   mutate(week_index = as.numeric(week - min(week)) / 7)
 
-write_csv(final_model_data, "../../data/cleaned/model_data_final.csv")
+setwd("C:/Users/lukec/OneDrive/Desktop/297A Research")
+
+write_csv(final_model_data, "data/cleaned/model_data_final.csv")
 ```
 
