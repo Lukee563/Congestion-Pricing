@@ -1,38 +1,118 @@
-# NYC Congestion Pricing and Its Effects on Motor Vehicle Collisions
----
-## Authors
-* **Luke Catalano** - *M.S. Quantitative Economics & Finance, UC Santa Cruz*
-* **Eleanor Stoever** - *B.S. Applied Mathematics, B.A. Environmental Studies & Economics, UC Santa Cruz*
+# Heterogeneous Causal Effects of NYC Congestion Pricing
+**Local Linear Causal Forests | Spatial Policy Evaluation | R**
 
 ---
+
 ## Overview
-This paper explores the causal effect of New York City’s Lower Manhattan congestion pricing policy on traffic collisions in the district of Manhattan. The study utilizes a **Difference-in-Differences (DiD)** empirical approach to evaluate how the policy, implemented on January 5th, 2025, affected total weekly collision counts.
 
-### Key Findings
-* **Significant Reduction:** We find a statistically significant decrease of approximately **20 total collisions** per week in the treatment area.
-* **Impact Scale:** This represents a **16.66% reduction** from the average weekly collision count over the 10 weeks following implementation.
-* **Economic/Safety Implications:** The study focuses on "reportable" collisions—those involving at least $1,000 in vehicle damage or personal injury.
+New York City's Congestion Pricing Act took effect on January 5, 2025, imposing a toll on vehicles entering Manhattan below 60th Street. Early difference-in-differences analysis estimated an average reduction of ~20 motor vehicle collisions per week inside the pricing zone — but average treatment effects mask where and when a pricing intervention actually works.
+
+This project estimates **spatially heterogeneous causal effects** of congestion pricing on weekly accident rates across all of NYC, using Local Linear Causal Forests (LLCF) developed by Athey & Wager (Stanford GSB). Rather than a single borough-level average, the model produces a hex-grid map of calibrated conditional average treatment effects (CATEs) — one estimate per spatial unit — over a 62-week post-treatment window.
+
+---
+
+## Key Findings
+
+- **3,598 hexagonal spatial units** covering the majority of NYC were evaluated
+- **57 hexes reached statistical significance** at the 90% confidence level (|t| > 1.645)
+- Among significant hexes:
+  - **25 showed reductions** in weekly accidents (CATEs ranging from −1.37 to −0.58 accidents/week), concentrated inside and immediately adjacent to the Manhattan cordon
+  - **32 showed increases** (CATEs ranging from +0.33 to +0.73 accidents/week), concentrated in the Bronx and along outer-borough arterials — consistent with traffic diversion
+- The spatial pattern suggests the policy reduced collisions within the pricing zone while redistributing some accident risk to surrounding areas
 
 ---
 
 ## Methodology
-The analysis compares two geographically similar areas that exhibited parallel collision trends prior to the policy:
-* **Treatment Group:** Lower Manhattan (the "Congestion Relief Zone" below 60th Street / 40.7650° N).
-* **Control Group:** Upper Manhattan (above 40.7650° N).
 
-### Empirical Strategy
-The study employs a linear regression model with **robust heteroscedastic standard errors** to account for non-constant variance over time:
+**Causal Identification**
+- Treatment defined as post-January 5, 2025 entry into the congestion pricing zone
+- Parallel trends validated across Upper/Lower Manhattan pre-treatment periods
+- Unconfoundedness assessed via placebo tests across spatial hex sizes
 
-$$crash.count = \beta_0 + \delta_0(post_i) + \beta_1(treat_i) + \delta_1(post_i \times treat_i)$$
+**LLCF Architecture**
+- Separate nuisance forests (`regression_forest`) estimate propensity scores (W.hat) and outcome baselines (Y.hat) before the causal forest is trained — the standard R-learner / partially linear setup from Athey & Wager
+- Causal forest trained with `honesty = TRUE`: data split between tree-building and effect-estimation partitions to ensure valid p-values
+- Linear correction applied to `y_coord` and `dist_60th` at prediction time to sharpen spatial heterogeneity estimates near the cordon boundary
+- Standard errors via infinitesimal jackknife variance estimates; significance threshold |t| > 1.645 (90% CL)
+- Dynamic calibration via `test_calibration()` — factor 1.80009 applied to raw CATEs to align predicted effects with observed magnitude
+- All forests: 2,000 trees, `tune.parameters = "all"`, clustered by `hex_id`, parallelized across available cores
 
-* **Validation:** The "Parallel Trends" assumption was verified through visual trend plotting and a Treatment-Control Balance Table, confirming no statistically significant differences in pre-treatment characteristics such as time of day or injury severity.
+**Feature Set (X matrix)**
+
+| Feature | Description |
+|---|---|
+| `baseline_risk` | Pre-treatment mean weekly collisions per hex |
+| `y_coord` | Northing (EPSG:2263) — north-south spatial gradient |
+| `dist_60th` | Distance from 60th Street cordon boundary |
+| `week_index` | Continuous time index (weeks since study start) |
+| `avg_temp` | Weekly average temperature (°F), nearest NYS Mesonet station |
+| `tot_precip` | Weekly total precipitation (inches), nearest NYS Mesonet station |
+
+**Data**
+- NYPD Motor Vehicle Collision Reports (Jan 2022 – Apr 2026); Staten Island excluded
+- Spatial grid: 1,640-ft hexagonal tessellation clipped to NYC shoreline via TIGRIS (EPSG:2263)
+- Treatment zone: official MTA congestion pricing geofence (WKT); hex assignment by centroid intersection
+- Weather: NYS Mesonet monthly CSVs; nearest station per hex via `st_nearest_feature`; data access fee waived
+
+**Computation**
+- Parallel processing across 64GB RAM local environment
+- Post-treatment window: 62 weeks (vs. 10 weeks in prior DiD analysis)
 
 ---
 
-## Data
-The dataset is derived from the **City of New York’s Motor Vehicle Collisions-Crashes** database, maintained by the NYPD.
-* **Period:** January 2023 – March 2025.
-* **Scope:** 115 weeks of data, providing 230 total observations (treatment vs. control pairings).
-* **Variables:** Includes collision coordinates (latitude/longitude), injury/death counts, and contributing factors.
+## Repository Structure
 
-*Project formatted in LaTeX - November 2025*
+```
+├── ATE_analysis/
+│   └── code/
+│       └── diff_in_diff             # Original DiD analysis (Upper vs. Lower Manhattan)
+│
+├── HTE_analysis/
+│   ├── code/
+│   │   ├── Data_Cleaning.R          # Spatial setup, collision panel, weather merge, feature engineering
+│   │   └── LLCF_model.R             # Nuisance forests, causal forest, CATE prediction, mapping
+│   ├── outputs/
+│   │   ├── shapefile                # NYC cordon boundary (MTA geofence)
+│   │   ├── Significant_Hexes.png   # Statistically significant CATEs (90% CL)
+│   │   ├── All_Hexes.png           # Full spatial distribution (all hexes, no significance filter)
+│   │   └── model_output.csv        # Hex-level CATE estimates, SEs, t-stats
+│   ├── Project_Proposal.pdf        # Independent study proposal
+│   └── Independent_Study_Introduction.pdf
+│
+├── Policy_Analysis_SlideDeck.pdf   # Slide deck overview of findings
+├── Proposal.pdf
+├── project_final.pdf               # Final empirical paper
+└── README.md
+```
+
+---
+
+## Visualizations
+
+**Statistically Significant CATEs (90% CL)**
+![Significant Hexes](HTE_analysis/outputs/Significant_Hexes.png)
+*Blue = fewer accidents/week. Red = more accidents/week. Boundary = Manhattan Cordon Line.*
+
+**Full Spatial Distribution (All Hexes)**
+![All Hexes](HTE_analysis/outputs/All_Hexes.png)
+
+---
+
+## Background and Motivation
+
+This project extends a prior difference-in-differences study (Econ 114, UCSC) that suffered from limited post-treatment data (10 weeks) and weak external validity. Moving to LLCF with 62 weeks of post-treatment observations addresses three limitations of the original analysis:
+
+1. **Granularity**: Borough-level averages obscure localized policy impacts
+2. **Heterogeneity**: Peak vs. off-peak hours and intersection density drive differential effects that ATE cannot capture
+3. **Statistical power**: A 6x longer post-treatment window yields more reliable causal estimates
+
+The LLCF framework is directly applicable to settings where a single average effect is insufficient — including dynamic pricing, demand estimation, and market design contexts where treatment response varies by unit characteristics.
+
+---
+
+## References
+
+- Athey, S. & Wager, S. (2019). *Estimating Treatment Effects with Causal Forests: An Application.* Observational Studies.
+- Tibshirani, J., Athey, S., Sverdrup, E., & Wager, S. (2020). *grf: Generalized Random Forests.* R package.
+- NYPD Motor Vehicle Collisions – Crashes. NYC Open Data.
+- NYS Mesonet Weather Data. University at Albany.
