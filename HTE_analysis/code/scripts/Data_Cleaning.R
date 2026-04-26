@@ -1,14 +1,3 @@
----
-title: "Data Cleaning and Aggregation"
-subtitle: "Augmentation of Weather Data and Subway Ridership with Collision Data"
-author: "Luke Catalano"
-date: "2026-04-05"
-output: pdf_document
----
-# Dataset Creation
-```{r}
-# NYC Congestion Pricing: Data Cleaning and Aggregation
-# Author: Luke Catalano
 rm(list=ls())
 library(readr)
 library(dplyr)
@@ -21,19 +10,14 @@ library(sf)
 library(data.table)
 library(purrr)
 
-# =====================================================================
-# 1. GLOBAL SETTINGS & TIME ALIGNMENT
-# =====================================================================
+# Global Constants
 START_DATE <- as.Date("2022-01-01")
 END_DATE   <- as.Date("2026-04-01") 
 TOLL_DATE  <- as.Date("2025-01-05")
-ST_60_Y    <- 217000 # EPSG:2263 Northing (60th St) - Kept for distance metrics
-
+ST_60_Y    <- 217000 # Northing for 60th St in EPSG:2263
 study_weeks <- seq.Date(START_DATE, END_DATE, by = "week")
 
-# =====================================================================
-# 2. WEATHER: IMPORT & ALIGNED AGGREGATION
-# =====================================================================
+# Weather Import: Map over month labels to build raw dataset
 labels <- crossing(y = 2021:2026, m = sprintf("%02d", 1:12)) %>%
   mutate(label = paste0(y, m)) %>%
   filter(label >= "202104" & label <= "202603") %>%
@@ -43,6 +27,7 @@ weather_raw <- map(labels, ~{
   read_csv(paste0("../../data/raw/weather/", .x, ".csv"), show_col_types = FALSE)
 }) %>% rbindlist(fill = TRUE)
 
+# Aggregate Weather to weekly station-level observations
 weather_weekly <- weather_raw %>%
   mutate(
     date = as.Date(time),
@@ -58,9 +43,7 @@ weather_weekly <- weather_raw %>%
     .groups = "drop"
   )
 
-# =====================================================================
-# 3. SPATIAL: BOUNDARY & HEX GRID
-# =====================================================================
+# Spatial Setup: Define NYC boundary and Hexagonal Tessellation
 nyc_boundary <- counties("NY", cb = TRUE) %>%
   filter(NAME %in% c("New York", "Kings", "Queens", "Bronx")) %>% 
   st_transform(2263)
@@ -68,17 +51,17 @@ nyc_boundary <- counties("NY", cb = TRUE) %>%
 hex_grid <- st_make_grid(nyc_boundary, cellsize = 1640, square = FALSE) %>%
   st_sf() %>%
   mutate(hex_id = row_number()) %>%
-  .[nyc_boundary, ]
+  .[nyc_boundary, ] # Spatial subset to NYC boundary
 
-# Use Centroids to prevent borough double-counting
+# Hex-to-Borough Lookup using centroids
 hex_borough_lookup <- hex_grid %>%
   st_centroid() %>% 
   st_join(nyc_boundary %>% select(BOROUGH_RECOVERED = NAME), join = st_nearest_feature) %>%
   st_drop_geometry() %>%
   select(hex_id, BOROUGH_RECOVERED) %>%
-  distinct(hex_id, .keep_all = TRUE) # Ensures 1:1 mapping
+  distinct(hex_id, .keep_all = TRUE)
 
-# Weather Station Mapping
+# Weather Station Mapping: Assign nearest station to each hex
 stations_lookup <- weather_raw %>%
   distinct(station, .keep_all = TRUE) %>%
   filter(!is.na(`latitude [degrees_north]`)) %>%
@@ -91,12 +74,8 @@ hex_station_map <- data.frame(
   nearest_station = stations_lookup$station[nearest_idx]
 )
 
-# =====================================================================
-# 4. COLLISIONS: SPATIAL TO BALANCED PANEL
-# =====================================================================
-MotorCollisions <- read_csv("../../data/raw/MotorCollisions.csv", show_col_types = FALSE)
-
-MotorCollisions <- MotorCollisions %>%
+# Collision Cleaning: Filter Staten Island and project to 2263
+MotorCollisions <- read_csv("../../data/raw/MotorCollisions.csv", show_col_types = FALSE) %>%
   filter(BOROUGH != "STATEN ISLAND")
 
 collisions_clean <- MotorCollisions %>%
@@ -110,29 +89,21 @@ collisions_clean <- MotorCollisions %>%
   st_join(hex_grid) %>%
   st_drop_geometry()
 
-# Zero-fill the panel
+# Create balanced panel with zero-filled collision counts
 collision_panel <- collisions_clean %>%
   group_by(hex_id, week) %>%
   summarise(y_count = n(), .groups = "drop") %>%
   complete(hex_id = hex_grid$hex_id, week = study_weeks, fill = list(y_count = 0))
 
-# =====================================================================
-# 5. FEATURE ENGINEERING & MASTER JOIN
-# =====================================================================
-
-# Load the official CBD geofence (update path if stored in data/raw)
+# CBD Boundary: Strictly define treatment area using the official geofence
 cbd_csv <- read_csv("../../data/raw/mta_shapefile.csv", show_col_types = FALSE)
-
-# Convert WKT to sf polygon, merge into one shape, and match 2263 CRS
 cbd_polygon <- st_as_sf(cbd_csv, wkt = "polygon", crs = 4326) %>%
   st_union() %>%
   st_transform(2263)
 
+# Feature Engineering: Centroids, distance to 60th, and in_zone flag
 hex_centroids_2263 <- st_centroid(hex_grid)
 hex_centroids_4326 <- st_transform(hex_centroids_2263, 4326)
-
-# Intersect centroids with the CBD boundary to define strict treatment zone
-# Returns a logical matrix which we convert to 1s and 0s
 in_cbd_matrix <- st_intersects(hex_centroids_2263, cbd_polygon, sparse = FALSE)
 
 hex_features <- hex_centroids_2263 %>%
@@ -143,14 +114,13 @@ hex_features <- hex_centroids_2263 %>%
     lat       = st_coordinates(hex_centroids_4326)[,2],
     dist_60th = abs(y_coord - ST_60_Y), 
     is_manh   = as.numeric(st_intersects(., nyc_boundary %>% filter(NAME == "New York"), sparse = FALSE)),
-    # Replaces the old y_coord < ST_60_Y bounding box logic
     in_zone   = as.numeric(in_cbd_matrix[, 1]) 
   ) %>%
   st_drop_geometry() %>%
   left_join(hex_station_map, by = "hex_id") %>%
   left_join(hex_borough_lookup, by = "hex_id")
 
-# Final Assembly
+# Final Master Join: Panel + Features + Weather
 final_model_data <- collision_panel %>%
   left_join(hex_features, by = "hex_id") %>%
   left_join(weather_weekly, by = c("week", "nearest_station" = "station")) %>%
@@ -162,12 +132,11 @@ final_model_data <- collision_panel %>%
   ) %>%
   select(-BOROUGH_RECOVERED)
 
-# C. Baseline Risk & Weather Imputation
+# Baseline Risk & Weather Imputation (Station-level and Global)
 final_model_data <- final_model_data %>%
   group_by(hex_id) %>%
   mutate(baseline_risk = mean(y_count[week < TOLL_DATE], na.rm = TRUE)) %>%
   ungroup() %>%
-  
   group_by(nearest_station) %>%
   mutate(
     avg_temp = if_else(is.na(avg_temp) | is.nan(avg_temp),
@@ -178,28 +147,29 @@ final_model_data <- final_model_data %>%
                          tot_precip)
   ) %>%
   ungroup() %>%
-  
   mutate(
     avg_temp = if_else(is.na(avg_temp), mean(avg_temp, na.rm = TRUE), avg_temp),
     tot_precip = if_else(is.na(tot_precip), 0, tot_precip)
   )
 
-# =====================================================================
-# 6. EXPORT & AUDIT VERIFICATION
-# =====================================================================
-
-# 1. Export as a flat CSV
+# Export Outputs
 write_csv(final_model_data, "../../data/cleaned/model_data_final.csv")
+st_write(hex_grid, "../../data/cleaned/spatial_files/hex_grid.geojson", delete_dsn = TRUE)
 
-# 2. Export as a multi-sheet Excel workbook
 county_sheets <- split(final_model_data, final_model_data$borough)
-sheets_to_export <- c(list("All_Data" = final_model_data), county_sheets)
 
-write_xlsx(sheets_to_export, "../../data/cleaned/model_data_analysis.xlsx")
+message("Processing complete for ", length(unique(final_model_data$hex_id)), " hexes.")
 
-# Print Audit Metrics
-message("Unique Hexagons: ", length(unique(final_model_data$hex_id)))
-message("Study Weeks: ", length(unique(final_model_data$week)))
-message("Total Row Count: ", nrow(final_model_data))  
-message("Boroughs: ", paste(unique(final_model_data$borough), collapse=", "))
-```
+# Define the objects to keep for the modeling and mapping pipeline
+keep_list <- c(
+  "cbd_polygon",      # Treatment zone boundary
+  "final_model_data", # Full cleaned panel
+  "hex_grid"        # Spatial geometry
+)
+
+# Remove everything else and free up RAM
+rm(list = setdiff(ls(), keep_list))
+gc()
+
+# Verification
+message("Environment cleared. Objects remaining: ", paste(ls(), collapse = ", "))
