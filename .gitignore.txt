@@ -1,9 +1,0 @@
-# R artifacts
-.RData
-.RDataTmp
-.RDataTmp1
-.Rhistory
-
-# macOS junk
-.DS_Store
-__MACOSX/
