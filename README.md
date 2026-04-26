@@ -79,9 +79,9 @@ This project estimates **spatially heterogeneous causal effects** of congestion 
 │   ├── Project_Proposal.pdf        # Independent study proposal
 │   └── Independent_Study_Introduction.pdf
 │
-├── Policy_Analysis_SlideDeck.pdf   # Slide deck overview of findings
+├── Policy_Analysis_SlideDeck.pdf   # In Depth Policy Analysis of the Congestion Pricing Act (2025)
 ├── Proposal.pdf
-├── project_final.pdf               # Final empirical paper
+├── project_final.pdf               # Final empirical paper (Submission to Advisor by June 15th, 2026)
 └── README.md
 ```
 
