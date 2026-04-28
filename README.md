@@ -5,9 +5,9 @@
 
 ## Overview
 
-New York City's Congestion Pricing Act took effect on January 5, 2025, imposing a toll on vehicles entering Manhattan below 60th Street. Early difference-in-differences analysis estimated an average reduction of ~20 motor vehicle collisions per week inside the pricing zone — but average treatment effects mask where and when a pricing intervention actually works.
+New York City's Congestion Pricing Act took effect on January 5, 2025, imposing a toll on vehicles entering Manhattan below 60th Street. Early difference-in-differences analysis estimated an average reduction of ~20 motor vehicle collisions per week inside the pricing zone, but average treatment effects mask where and when a pricing intervention actually works.
 
-This project estimates **spatially heterogeneous causal effects** of congestion pricing on weekly accident rates across all of NYC, using Local Linear Causal Forests (LLCF) developed by Athey & Wager (Stanford GSB). Rather than a single borough-level average, the model produces a hex-grid map of calibrated conditional average treatment effects (CATEs) — one estimate per spatial unit — over a 62-week post-treatment window.
+This project estimates **spatially heterogeneous causal effects** of congestion pricing on weekly accident rates across all of NYC, using Local Linear Causal Forests (LLCF) developed by Athey & Wager (Stanford GSB). Rather than a single borough-level average, the model produces a hex-grid map of calibrated conditional average treatment effects (CATEs) — one estimate per spatial unit, over a 62-week post-treatment window.
 
 ---
 
@@ -17,7 +17,7 @@ This project estimates **spatially heterogeneous causal effects** of congestion 
 - **57 hexes reached statistical significance** at the 90% confidence level (|t| > 1.645)
 - Among significant hexes:
   - **25 showed reductions** in weekly accidents (CATEs ranging from −1.37 to −0.58 accidents/week), concentrated inside and immediately adjacent to the Manhattan cordon
-  - **32 showed increases** (CATEs ranging from +0.33 to +0.73 accidents/week), concentrated in the Bronx and along outer-borough arterials — consistent with traffic diversion
+  - **32 showed increases** (CATEs ranging from +0.33 to +0.73 accidents/week), concentrated in the Bronx and along outer-borough arterials, consistent with traffic diversion
 - The spatial pattern suggests the policy reduced collisions within the pricing zone while redistributing some accident risk to surrounding areas
 
 ---
@@ -30,11 +30,11 @@ This project estimates **spatially heterogeneous causal effects** of congestion 
 - Unconfoundedness assessed via placebo tests across spatial hex sizes
 
 **LLCF Architecture**
-- Separate nuisance forests (`regression_forest`) estimate propensity scores (W.hat) and outcome baselines (Y.hat) before the causal forest is trained — the standard R-learner / partially linear setup from Athey & Wager
+- Separate nuisance forests (`regression_forest`) estimate propensity scores (W.hat) and outcome baselines (Y.hat) before the causal forest is trained, the standard R-learner / partially linear setup from Athey & Wager
 - Causal forest trained with `honesty = TRUE`: data split between tree-building and effect-estimation partitions to ensure valid p-values
 - Linear correction applied to `y_coord` and `dist_60th` at prediction time to sharpen spatial heterogeneity estimates near the cordon boundary
 - Standard errors via infinitesimal jackknife variance estimates; significance threshold |t| > 1.645 (90% CL)
-- Dynamic calibration via `test_calibration()` — factor 1.80009 applied to raw CATEs to align predicted effects with observed magnitude
+- Dynamic calibration via `test_calibration()`: factor 1.80009 applied to raw CATEs to align predicted effects with observed magnitude
 - All forests: 2,000 trees, `tune.parameters = "all"`, clustered by `hex_id`, parallelized across available cores
 
 **Feature Set (X matrix)**
@@ -42,7 +42,7 @@ This project estimates **spatially heterogeneous causal effects** of congestion 
 | Feature | Description |
 |---|---|
 | `baseline_risk` | Pre-treatment mean weekly collisions per hex |
-| `y_coord` | Northing (EPSG:2263) — north-south spatial gradient |
+| `y_coord` | Northing (EPSG:2263) north-south spatial gradient |
 | `dist_60th` | Distance from 60th Street cordon boundary |
 | `week_index` | Continuous time index (weeks since study start) |
 | `avg_temp` | Weekly average temperature (°F), nearest NYS Mesonet station |
@@ -105,7 +105,7 @@ This project extends a prior difference-in-differences study (Econ 114, UCSC) th
 2. **Heterogeneity**: Peak vs. off-peak hours and intersection density drive differential effects that ATE cannot capture
 3. **Statistical power**: A 6x longer post-treatment window yields more reliable causal estimates
 
-The LLCF framework is directly applicable to settings where a single average effect is insufficient — including dynamic pricing, demand estimation, and market design contexts where treatment response varies by unit characteristics.
+The LLCF framework is directly applicable to settings where a single average effect is insufficient, including dynamic pricing, demand estimation, and market design contexts where treatment response varies by unit characteristics.
 
 ---
 
