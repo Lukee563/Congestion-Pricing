@@ -1,3 +1,13 @@
+library(readr)
+library(dplyr)
+library(tidyr)
+library(grf)
+library(ggplot2)
+library(sf)
+library(viridis)
+library(scales)
+library(tigris)
+
 model_output <- read.csv("../../outputs/model_output.csv")
 
 full_map_sf <- hex_grid %>%
@@ -41,21 +51,19 @@ p_final <- ggplot(full_map_clipped) +
     text = element_text(family = "serif"),
     plot.title = element_text(size = 22, face = "bold", margin = margin(t = 20, b = 10)),
     plot.subtitle = element_text(size = 13, color = "grey20", margin = margin(b = 25)),
-    plot.caption = element_text(size = 9, color = "grey40", face = "italic", margin = margin(t = 20)),
+    plot.caption = element_text(size = 17, color = "grey40", face = "italic", margin = margin(t = 20)),
     legend.position = c(0.12, 0.28), 
     legend.background = element_rect(fill = alpha("white", 0.7), color = NA),
     plot.margin = margin(15, 15, 15, 15)
   ) +
   labs(
     title = "Spatial Heterogeneity of Congestion Pricing Impacts",
-    subtitle = "Calibrated Causal Estimates Clipped to NYC Shoreline (90% CL)",
-    caption = paste0(" | Significance: |t| > 1.645 | Boundary: Manhattan Cordon Line.")
+    subtitle = "Calibrated Causal Estimates Clipped to NYC Shoreline",
+    caption = paste0("Significance: |t| > ", sig_level," Boundary: Manhattan Cordon Line.")
   )
 
 # Save Outputs
 ggsave("../../outputs/NYC_Causal_Impact.png", plot = p_final, width = 12, height = 15, dpi = 300, bg = "white")
-write_csv(full_map_sf, "../../outputs/model_output_test.csv")
-
 
 # Define core results and spatial data to persist
 essentials <- c(
