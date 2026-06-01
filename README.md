@@ -10,6 +10,7 @@ New York City's Congestion Pricing Act took effect on January 5, 2025, imposing 
 This project estimates **spatially heterogeneous causal effects** of congestion pricing on weekly accident rates across NYC's four-borough road network, using Local Linear Causal Forests (LLCF) developed by Athey & Wager (Stanford GSB). Rather than a single borough-level average, the model produces a hex-grid map of calibrated conditional average treatment effects (CATEs), one estimate per spatial unit, over a 62-week post-treatment window.
 
 I then run the same model with weekly average vehicle speed as the outcome variable to explore the relationship between the congestion pricing program and average vehicle speeds across the four-borough road network, and to examine how these estimates compare with the effect of vehicle collisions in each hexagon. I will compare my results to those estimated by Economists Hunt Allcott and Shoshana Vasserman (along with researchers from Google and Yale) who found that NYC's congestion pricing program increased speeds on CBD roads by 11%.
+
 ---
 
 ## Key Findings
