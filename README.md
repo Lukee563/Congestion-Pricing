@@ -2,6 +2,8 @@
 **Local Linear Causal Forests | Spatial Policy Evaluation | R**
 
 ---
+## Acknowledgments
+I thank Peter Christensen for invaluable guidance and Ellie Stoever for contributions to the original difference-in-differences analysis underlying this work.
 
 ## Overview
 
