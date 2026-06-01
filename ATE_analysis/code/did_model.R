@@ -10,7 +10,7 @@ library(sandwich)
 library(lmtest)
 library(ggplot2)
 
-data <- read.csv('data/motor.csv')
+data <- read_csv("../../data/raw/MotorCollisions.csv", show_col_types = FALSE)
 
 # Policy date
 policy_date <- as.Date("2025-01-05")

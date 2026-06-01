@@ -198,7 +198,6 @@ final_model_data <- final_model_data %>%
     tot_precip = if_else(is.na(tot_precip), 0, tot_precip)
   )
 
-
 # 7. DATA PERSISTENCE EXPORT & CLEANUP ENVIRONMENT
 message("[", Sys.time(), "] Writing final datasets out to local directory...")
 
@@ -214,7 +213,9 @@ keep_list <- c(
   "cbd_polygon",      
   "final_model_data", 
   "hex_grid",         
-  "stations_lookup"   
+  "hex_features",      # needed by Speed_Data_Cleaning.R
+  "weather_weekly",    # needed by Speed_Data_Cleaning.R
+  "stations_lookup"
 )
 
 # Purge transient matrices to release memory for the causal forest modeling step
