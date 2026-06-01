@@ -96,10 +96,6 @@ I then run the same model with weekly average vehicle speed as the outcome varia
 ![Significant Hexes](HTE_analysis/outputs/NYC_Causal_Impact.png)
 *Blue = fewer accidents/week. Red = more accidents/week. Boundary = Manhattan Cordon Line.*
 
-**Statistically Significant CATEs (95% CL)**
-![Significant Hexes](HTE_analysis/outputs/NYC_Speed_Impact.png)
-*Blue = Decreased Avg Speed. Red = Increased Avg Speed. Boundary = Manhattan Cordon Line.*
-
 ---
 
 ## Background and Motivation
