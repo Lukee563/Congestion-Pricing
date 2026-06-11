@@ -6,6 +6,7 @@
 New York City's Congestion Pricing Act took effect on January 5, 2025, imposing a toll on vehicles entering Manhattan below 60th Street. Early difference-in-differences analysis estimated an average reduction of ~20 motor vehicle collisions per week inside the pricing zone, but average treatment effects mask where and when a pricing intervention actually works.
 
 This project estimates **spatially heterogeneous causal effects** of congestion pricing on weekly accident rates across NYC's four-borough road network, using Local Linear Causal Forests (LLCF) developed by Friedberg, Tibshirani, Athey & Wager (2021). Rather than a single borough-level average, the model produces a hex-grid map of calibrated conditional average treatment effects (CATEs), one estimate per spatial unit, over a 62-week post-treatment window.
+
 ---
 
 ## Key Findings
