@@ -2,7 +2,6 @@ rm(list=ls())
 library(readr)
 library(dplyr)
 library(tidyr)
-library(nasapower)
 library(writexl)
 library(tigris)
 library(lubridate)
@@ -10,66 +9,78 @@ library(sf)
 library(data.table)
 library(purrr)
 
+
 # Global Constants
-START_DATE  <- as.Date("2022-01-01")
-END_DATE    <- as.Date("2026-04-01") 
+START_DATE  <- as.Date("2024-01-01")
+END_DATE    <- as.Date("2026-04-01")
 TOLL_DATE   <- as.Date("2025-01-05")
-ST_60_Y     <- 217000 # Northing for 60th St in EPSG:2263
-study_weeks <- seq.Date(START_DATE, END_DATE, by = "week")
+ST_60_Y     <- 217000
+WEEK_START  <- 6   # Saturday
+
+# Floor the bounds to the SAME anchor the data uses
+START_WK <- floor_date(START_DATE, "week", week_start = WEEK_START)
+END_WK   <- floor_date(END_DATE,   "week", week_start = WEEK_START)
+study_weeks <- seq.Date(START_WK, END_WK, by = "week")
+
+message("[", Sys.time(), "] Study window: ", START_WK, " to ", END_WK,
+        " (", length(study_weeks), " weeks)")
+
 
 
 # 1. WEATHER DATA IMPORT & AGGREGATION
+#    Weather file labels (YYYYMM) are derived from the study window with one
+#    month of padding on each side, so changing the dates never leaves the
+#    loader pointing at a hardcoded range.
 message("[", Sys.time(), "] Loading and aggregating raw weather inputs...")
+lab_start <- format(START_WK %m-% months(1), "%Y%m")
+lab_end   <- format(END_WK   %m+% months(1), "%Y%m")
 
-labels <- crossing(y = 2021:2026, m = sprintf("%02d", 1:12)) %>%
+labels <- crossing(y = 2020:2027, m = sprintf("%02d", 1:12)) %>%
   mutate(label = paste0(y, m)) %>%
-  filter(label >= "202104" & label <= "202603") %>%
+  filter(label >= lab_start & label <= lab_end) %>%
   pull(label)
 
-weather_raw <- map(labels, ~{
-  read_csv(paste0("../../data/raw/weather/", .x, ".csv"), show_col_types = FALSE)
-}) %>% rbindlist(fill = TRUE)
+weather_paths <- paste0("../../data/raw/weather/", labels, ".csv")
+weather_paths <- weather_paths[file.exists(weather_paths)]
+
+weather_raw <- map(weather_paths, ~read_csv(.x, show_col_types = FALSE)) %>%
+  rbindlist(fill = TRUE)
 
 weather_weekly <- weather_raw %>%
   mutate(
     date = as.Date(time),
-    week = floor_date(date, "week", week_start = 6)
+    week = floor_date(date, "week", week_start = WEEK_START)
   ) %>%
-  filter(week %in% study_weeks) %>% 
+  filter(week %in% study_weeks) %>%
   group_by(week, station) %>%
   summarise(
-    avg_temp      = mean(`temp_2m_avg [degF]`, na.rm = TRUE),
-    avg_humidity  = mean(`relative_humidity_avg [percent]`, na.rm = TRUE),
-    tot_precip    = if(all(is.na(`precip_total [inch]`))) NA else sum(`precip_total [inch]`, na.rm = TRUE),
-    obs_count     = n(),
+    avg_temp     = mean(`temp_2m_avg [degF]`, na.rm = TRUE),
+    avg_humidity = mean(`relative_humidity_avg [percent]`, na.rm = TRUE),
+    tot_precip   = if (all(is.na(`precip_total [inch]`))) NA_real_
+    else sum(`precip_total [inch]`, na.rm = TRUE),
+    obs_count    = n(),
     .groups = "drop"
   )
 
-
-# 2. SPATIAL SETUP: LANDMASS BOUNDARY & WATER COUPLING
+# 2. SPATIAL SETUP: LANDMASS BOUNDARY & WATER IDENTIFICATION
 message("[", Sys.time(), "] Fetching NYC land borders and erasing water bodies...")
 
-# Fetch the administrative boundaries for the four study counties
 nyc_counties <- counties("NY", cb = TRUE) %>%
-  filter(NAME %in% c("New York", "Kings", "Queens", "Bronx")) %>% 
+  filter(NAME %in% c("New York", "Kings", "Queens", "Bronx")) %>%
   st_transform(2263)
 
-# Fetch official water area shapefiles for the corresponding FIPS codes
-nyc_fips <- c("061", "047", "081", "005") # Manhattan, Brooklyn, Queens, Bronx
+nyc_fips <- c("061", "047", "081", "005")
 nyc_water <- map_df(nyc_fips, ~area_water("NY", .x, year = 2022)) %>%
   st_transform(2263) %>%
-  st_union() # Flatten all water features into a unified erasing mask
+  st_union()
 
-# Erase the waterways from the county landmass
 nyc_boundary <- st_difference(st_union(nyc_counties), nyc_water)
 
-# Generate the Hexagonal Tessellation strictly clipped to the land mass bounds
 hex_grid <- st_make_grid(nyc_boundary, cellsize = 1640, square = FALSE) %>%
   st_sf() %>%
-  .[nyc_boundary, ] %>%             # Spatial subset keeps hexes intersecting land
-  mutate(hex_id = row_number())     # IDs assigned sequentially only to real land hexes
+  .[nyc_boundary, ] %>%
+  mutate(hex_id = row_number())
 
-# Hex-to-Borough Lookup using centroids against the original administrative county files
 hex_borough_lookup <- hex_grid %>%
   st_centroid() %>%
   st_join(nyc_counties %>% select(BOROUGH_RECOVERED = NAME), join = st_nearest_feature) %>%
@@ -77,11 +88,9 @@ hex_borough_lookup <- hex_grid %>%
   select(hex_id, BOROUGH_RECOVERED) %>%
   distinct(hex_id, .keep_all = TRUE)
 
-
-# 3. SPATIAL FEATURE ENGINERING: WEATHER STATIONS & SUBWAYS
+# 3. SPATIAL FEATURE ENGINEERING: WEATHER STATIONS & SUBWAYS
 message("[", Sys.time(), "] Mapping weather stations and subway networks to hex grid...")
 
-# Weather Station Mapping: Assign nearest station to each hex centroid
 stations_lookup <- weather_raw %>%
   distinct(station, .keep_all = TRUE) %>%
   filter(!is.na(`latitude [degrees_north]`)) %>%
@@ -90,26 +99,22 @@ stations_lookup <- weather_raw %>%
 
 nearest_idx <- st_nearest_feature(hex_grid, stations_lookup)
 hex_station_map <- data.frame(
-  hex_id = hex_grid$hex_id,
+  hex_id          = hex_grid$hex_id,
   nearest_station = stations_lookup$station[nearest_idx]
 )
 
-# Pull in Subway Station data and compute distance matrices
 subways <- read.csv("../../data/raw/MTA_Subway_Stations_20260516.csv")
-
 subway_stations_sf <- subways %>%
   filter(!is.na(GTFS.Latitude), !is.na(GTFS.Longitude)) %>%
   st_as_sf(coords = c("GTFS.Longitude", "GTFS.Latitude"), crs = 4326) %>%
-  st_transform(2263) 
+  st_transform(2263)
 
 nearest_subway_idx <- st_nearest_feature(hex_grid, subway_stations_sf)
 distances <- st_distance(hex_grid, subway_stations_sf[nearest_subway_idx, ], by_element = TRUE)
-
 hex_subway_map <- data.frame(
-  hex_id = hex_grid$hex_id,
+  hex_id         = hex_grid$hex_id,
   subway_dist_ft = as.numeric(distances)
 )
-
 
 # 4. COLLISION CLEANING & REBALANCED PANEL PRODUCTION
 message("[", Sys.time(), "] Processing collision files into a balanced land-only panel...")
@@ -119,21 +124,19 @@ MotorCollisions <- read_csv("../../data/raw/MotorCollisions.csv", show_col_types
 
 collisions_clean <- MotorCollisions %>%
   mutate(date = mdy(`CRASH DATE`),
-         week = floor_date(date, "week", week_start = 6)) %>% 
-  filter(date >= START_DATE, date <= END_DATE, 
+         week = floor_date(date, "week", week_start = WEEK_START)) %>%
+  filter(week %in% study_weeks,
          !is.na(LATITUDE), !is.na(LONGITUDE)) %>%
   st_as_sf(coords = c("LONGITUDE", "LATITUDE"), crs = 4326) %>%
   st_transform(2263) %>%
-  st_filter(hex_grid) %>% # Drops crashes outside our new land-based grid
+  st_filter(hex_grid) %>%
   st_join(hex_grid) %>%
   st_drop_geometry()
 
-# Create balanced panel with zero-filled collision counts across LAND hexes only
 collision_panel <- collisions_clean %>%
   group_by(hex_id, week) %>%
   summarise(y_count = n(), .groups = "drop") %>%
   complete(hex_id = hex_grid$hex_id, week = study_weeks, fill = list(y_count = 0))
-
 
 # 5. CBD BOUNDARY INTERSECTIONS & SPATIAL ATTRIBUTES
 message("[", Sys.time(), "] Building geographic feature columns and treatments...")
@@ -143,7 +146,6 @@ cbd_polygon <- st_as_sf(cbd_csv, wkt = "polygon", crs = 4326) %>%
   st_union() %>%
   st_transform(2263)
 
-# Calculate structural features from pure landward hex centroids
 hex_centroids_2263 <- st_centroid(hex_grid)
 hex_centroids_4326 <- st_transform(hex_centroids_2263, 4326)
 in_cbd_matrix      <- st_intersects(hex_centroids_2263, cbd_polygon, sparse = FALSE)
@@ -154,15 +156,14 @@ hex_features <- hex_centroids_2263 %>%
     y_coord   = st_coordinates(.)[,2],
     lon       = st_coordinates(hex_centroids_4326)[,1],
     lat       = st_coordinates(hex_centroids_4326)[,2],
-    dist_60th = abs(y_coord - ST_60_Y), 
+    dist_60th = abs(y_coord - ST_60_Y),
     is_manh   = as.numeric(st_intersects(., nyc_counties %>% filter(NAME == "New York"), sparse = FALSE)),
-    in_zone   = as.numeric(in_cbd_matrix[, 1]) 
+    in_zone   = as.numeric(in_cbd_matrix[, 1])
   ) %>%
   st_drop_geometry() %>%
-  left_join(hex_station_map, by = "hex_id") %>%
-  left_join(hex_subway_map, by = 'hex_id') %>%
+  left_join(hex_station_map,    by = "hex_id") %>%
+  left_join(hex_subway_map,     by = "hex_id") %>%
   left_join(hex_borough_lookup, by = "hex_id")
-
 
 # 6. MASTER COMPILATION & IMPUTATION
 message("[", Sys.time(), "] Merging master matrices and generating baseline markers...")
@@ -178,48 +179,79 @@ final_model_data <- collision_panel %>%
   ) %>%
   select(-BOROUGH_RECOVERED)
 
-# Calculate baseline risk and resolve minor weather station missingness
+# Baseline pre-policy collision risk per hexagon
 final_model_data <- final_model_data %>%
   group_by(hex_id) %>%
   mutate(baseline_risk = mean(y_count[week < TOLL_DATE], na.rm = TRUE)) %>%
-  ungroup() %>%
-  group_by(nearest_station) %>%
-  mutate(
-    avg_temp = if_else(is.na(avg_temp) | is.nan(avg_temp),
-                       ifelse(all(is.na(avg_temp)), NA_real_, mean(avg_temp, na.rm = TRUE)),
-                       avg_temp),
-    tot_precip = if_else(is.na(tot_precip) | is.nan(tot_precip),
-                         ifelse(all(is.na(tot_precip)), 0, mean(tot_precip, na.rm = TRUE)),
-                         tot_precip)
-  ) %>%
-  ungroup() %>%
-  mutate(
-    avg_temp = if_else(is.na(avg_temp), mean(avg_temp, na.rm = TRUE), avg_temp),
-    tot_precip = if_else(is.na(tot_precip), 0, tot_precip)
-  )
+  ungroup()
 
-# 7. DATA PERSISTENCE EXPORT & CLEANUP ENVIRONMENT
+# Weather missingness: same-week cross-station mean (seasonality-preserving)
+week_means <- weather_weekly %>%
+  group_by(week) %>%
+  summarise(week_temp   = mean(avg_temp,   na.rm = TRUE),
+            week_precip = mean(tot_precip, na.rm = TRUE),
+            .groups = "drop")
+
+final_model_data <- final_model_data %>%
+  left_join(week_means, by = "week") %>%
+  mutate(
+    avg_temp   = coalesce(avg_temp,   week_temp),
+    tot_precip = coalesce(tot_precip, week_precip)
+  ) %>%
+  select(-week_temp, -week_precip)
+
+# Checks
+n_temp_na   <- sum(is.na(final_model_data$avg_temp))
+n_precip_na <- sum(is.na(final_model_data$tot_precip))
+n_bad_week  <- sum(!(final_model_data$week %in% study_weeks))
+
+if (n_bad_week > 0)
+  stop("Week mismatch: ", n_bad_week, " rows on weeks outside study_weeks. ",
+       "Check WEEK_START alignment.")
+if (n_temp_na > 0 || n_precip_na > 0)
+  stop("Residual weather NAs after imputation: temp=", n_temp_na,
+       " precip=", n_precip_na, ". A study week likely has zero reporting ",
+       "stations; widen the weather label range or patch that week.")
+
+message("[", Sys.time(), "] Integrity checks passed: 0 bad weeks, 0 weather NAs.")
+
+
+# 7. EXPORT & CLEANUP
 message("[", Sys.time(), "] Writing final datasets out to local directory...")
 
 write_csv(final_model_data, "../../data/cleaned/model_data_final.csv")
 st_write(hex_grid, "../../data/cleaned/spatial_files/hex_grid.geojson", delete_dsn = TRUE)
 
-county_sheets <- split(final_model_data, final_model_data$borough)
+message("Processing complete for ", n_distinct(final_model_data$hex_id),
+        " hexes over ", n_distinct(final_model_data$week), " weeks (",
+        nrow(final_model_data), " rows).")
 
-message("Processing complete for ", length(unique(final_model_data$hex_id)), " land-based hexes.")
-
-# Define pipeline tracking persistence list
-keep_list <- c(
-  "cbd_polygon",      
-  "final_model_data", 
-  "hex_grid",         
-  "hex_features",      # needed by Speed_Data_Cleaning.R
-  "weather_weekly",    # needed by Speed_Data_Cleaning.R
-  "stations_lookup"
+# Table Generation
+library(kableExtra)
+# Variables to summarize, in display order, with labels, panel, and digits 
+sumvars <- tibble::tribble(
+  ~var,             ~label,                                ~panel,                   ~digits,
+  "y_count",        "Weekly collisions",                   "Outcome",                 2,
+  "baseline_risk",  "Baseline weekly risk (pre-policy)",   "Outcome",                 2,
+  "treatment",      "Treated (in-zone $\\times$ post)",    "Treatment \\& geography", 3,
+  "in_zone",        "In congestion zone",                  "Treatment \\& geography", 3,
+  "is_manh",        "Manhattan",                           "Treatment \\& geography", 3,
+  "dist_60th",      "Distance to 60th St.\\ (ft)",         "Treatment \\& geography", 0,
+  "subway_dist_ft", "Distance to subway (ft)",             "Treatment \\& geography", 0,
+  "avg_temp",       "Avg.\\ temperature ($^\\circ$F)",     "Weather controls",        1,
+  "tot_precip",     "Total precipitation (in)",            "Weather controls",        2
 )
 
-# Purge transient matrices to release memory for the causal forest modeling step
-rm(list = setdiff(ls(), keep_list))
-gc()
-
-message("Environment cleared. Objects remaining: ", paste(ls(), collapse = ", "))
+# Compute stats over the estimation sample (hexagon-week)
+stat_tbl <- final_model_data %>%
+  select(all_of(sumvars$var)) %>%
+  pivot_longer(everything(), names_to = "var", values_to = "value") %>%
+  group_by(var) %>%
+  summarise(
+    Mean = mean(value, na.rm = TRUE), SD = sd(value, na.rm = TRUE),
+    Min = min(value, na.rm = TRUE), Median = median(value, na.rm = TRUE),
+    Max = max(value, na.rm = TRUE), .groups = "drop"
+  )
+nrow(final_model_data)
+n_distinct(final_model_data$hex_id)
+print(stat_tbl)

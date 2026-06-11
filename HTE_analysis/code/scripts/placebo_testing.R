@@ -8,7 +8,6 @@ library(sf)
 library(data.table)
 library(purrr)
 
-
 # 1. BASE MATRIX CONSTRUCTION (RUNS ONCE)
 spatial_construction <- function(){
   START_DATE  <- as.Date("2022-01-01")
@@ -279,9 +278,6 @@ X_features <- c("x_coord", "y_coord", "lon", "lat", "dist_60th",
 for(p_date in placebo_dates) {
   
   target_dt <- as.Date(p_date)
-  message("\n======================================================================")
-  message("[", Sys.time(), "] STARTING BALANCED FOREST FOR PLACEBO DATE: ", p_date)
-  message("======================================================================")
   
   # 1. READ TARGET DATA RUN
   target_file_path <- paste0("../../data/cleaned/placebos/placebo_date_", p_date, ".csv")
