@@ -1,10 +1,6 @@
 # Heterogeneous Causal Effects of NYC Congestion Pricing
 **Local Linear Causal Forests | Spatial Policy Evaluation | R**
 
----
-## Acknowledgments
-I thank Peter Christensen for invaluable guidance and Ellie Stoever for contributions to the original difference-in-differences analysis underlying this work.
-
 ## Overview
 
 New York City's Congestion Pricing Act took effect on January 5, 2025, imposing a toll on vehicles entering Manhattan below 60th Street. Early difference-in-differences analysis estimated an average reduction of ~20 motor vehicle collisions per week inside the pricing zone, but average treatment effects mask where and when a pricing intervention actually works.
@@ -18,11 +14,8 @@ I then run the same model with weekly average vehicle speed as the outcome varia
 ## Key Findings
 
 - **3,598 hexagonal spatial units** covering the majority of NYC were evaluated
-- **57 hexes reached statistical significance** at the 90% confidence level (|t| > 1.645)
-- Among significant hexes:
-  - **25 showed reductions** in weekly accidents (CATEs ranging from −1.37 to −0.58 accidents/week), concentrated inside and immediately adjacent to the Manhattan cordon
-  - **32 showed increases** (CATEs ranging from +0.33 to +0.73 accidents/week), concentrated in the Bronx and along outer-borough arterials, consistent with traffic diversion
-- The spatial pattern suggests the policy reduced collisions within the pricing zone while redistributing some accident risk to surrounding areas
+- **1 hex reached statistical significance** at the 95% confidence level
+- Congestion Pricing had no statistically significant impact on vehicle collisions across New York City
 
 ---
 
@@ -89,15 +82,6 @@ I then run the same model with weekly average vehicle speed as the outcome varia
 ```
 
 ---
-
-## Visualizations
-
-**Statistically Significant CATEs (95% CL)**
-![Significant Hexes](HTE_analysis/outputs/NYC_Causal_Impact.png)
-*Blue = fewer accidents/week. Red = more accidents/week. Boundary = Manhattan Cordon Line.*
-
----
-
 ## Background and Motivation
 
 This project extends a prior difference-in-differences study (Econ 114, UCSC) that suffered from limited post-treatment data (10 weeks) and weak external validity. Moving to LLCF with 62 weeks of post-treatment observations addresses three limitations of the original analysis:
