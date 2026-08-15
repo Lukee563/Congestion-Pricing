@@ -1,10 +1,18 @@
-ATE_analysis/.DS_Store
-HTE_analysis/code/scripts/.Rhistory
+# Local tool config
+.claude/
+
+# macOS
 .DS_Store
-ATE_analysis/code/.DS_Store
-HTE_analysis/.DS_Store
-HTE_analysis/code/.DS_Store
-HTE_analysis/code/scripts/.DS_Store
-HTE_analysis/figures/.DS_Store
-HTE_analysis/outputs/.DS_Store
-HTE_analysis/outputs/placebos/.DS_Store
+
+# R session/history files
+.Rhistory
+.Rapp.history
+.RData
+.RDataTmp*
+
+# Derived data (regenerate via HTE_analysis/code/scripts/Data_Cleaning.R)
+data/cleaned/
+
+# Local-only full-size backup of raw crash data (pre-trim)
+data/raw/MotorCollisions_full_backup.csv
+data/weather.csv

@@ -9,7 +9,6 @@ library(sf)
 library(data.table)
 library(purrr)
 
-
 # Global Constants
 START_DATE  <- as.Date("2024-01-01")
 END_DATE    <- as.Date("2026-04-01")
@@ -24,7 +23,6 @@ study_weeks <- seq.Date(START_WK, END_WK, by = "week")
 
 message("[", Sys.time(), "] Study window: ", START_WK, " to ", END_WK,
         " (", length(study_weeks), " weeks)")
-
 
 
 # 1. WEATHER DATA IMPORT & AGGREGATION
